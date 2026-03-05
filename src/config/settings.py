@@ -14,11 +14,11 @@ class Settings(BaseSettings):
     """YouGile MCP server configuration."""
     
     # YouGile API settings
-    yougile_base_url: str = "https://yougile.com"
+    yougile_base_url: str = Field(default="https://yougile.com", alias="YOUGILE_BASE_URL")
     yougile_email: Optional[str] = None
     yougile_password: Optional[str] = None
-    yougile_company_id: Optional[str] = None
-    yougile_api_key: Optional[str] = None
+    yougile_company_id: Optional[str] = Field(default=None, alias="YOUGILE_COMPANY_ID")
+    yougile_api_key: Optional[str] = Field(default=None, alias="YOUGILE_API_KEY")
 
     # MCP incoming API key (no YOUGILE_ prefix)
     mcp_api_key: Optional[str] = Field(default=None, alias="MCP_API_KEY")
@@ -40,7 +40,6 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     
     class Config:
-        env_prefix = "YOUGILE_"
         env_file = ".env"
         case_sensitive = False
 
