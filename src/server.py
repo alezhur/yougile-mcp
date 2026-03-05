@@ -6,7 +6,9 @@ Registers all tools, resources, and prompts for YouGile API access.
 """
 
 import asyncio
+from pydantic import AnyHttpUrl
 from mcp.server.auth.provider import AccessToken, TokenVerifier
+from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP, Context
 from .config import settings
 from .core import auth
@@ -114,11 +116,18 @@ def _build_mcp_server() -> FastMCP:
     if not settings.mcp_api_key:
         raise RuntimeError("MCP_API_KEY is required to start the server")
 
+    auth_settings = AuthSettings(
+        issuer_url=AnyHttpUrl("http://31.129.100.225:8000"),
+        resource_server_url=AnyHttpUrl("http://31.129.100.225:8000"),
+        required_scopes=[],
+    )
+
     return FastMCP(
         name=settings.server_name,
         host="0.0.0.0",
         port=8000,
         token_verifier=StaticApiKeyTokenVerifier(settings.mcp_api_key),
+        auth=auth_settings,
     )
 
 
