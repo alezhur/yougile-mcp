@@ -6,11 +6,11 @@ Registers all tools, resources, and prompts for YouGile API access.
 """
 
 import asyncio
+from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.fastmcp import FastMCP, Context
 from .config import settings
 from .core import auth
 from .core.client import YouGileClient
-from .api import auth as auth_api
 from .yougile_mcp.tools.auth_tools import (
     get_companies_tool, 
     create_api_key_tool,
@@ -93,8 +93,37 @@ from .yougile_mcp.prompts.workflow_prompts import (
     retrospective_analysis_prompt,
 )
 
+class StaticApiKeyTokenVerifier(TokenVerifier):
+    """Verifies incoming MCP bearer token against MCP_API_KEY."""
+
+    def __init__(self, expected_token: str):
+        self.expected_token = expected_token.strip()
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        if not token or token.strip() != self.expected_token:
+            return None
+
+        # Keep token payload minimal; server only needs successful validation.
+        try:
+            return AccessToken(token=token.strip(), client_id="yougile-mcp-client", scopes=[])
+        except TypeError:
+            return AccessToken(client_id="yougile-mcp-client", scopes=[])
+
+
+def _build_mcp_server() -> FastMCP:
+    if not settings.mcp_api_key:
+        raise RuntimeError("MCP_API_KEY is required to start the server")
+
+    return FastMCP(
+        name=settings.server_name,
+        host="0.0.0.0",
+        port=8000,
+        token_verifier=StaticApiKeyTokenVerifier(settings.mcp_api_key),
+    )
+
+
 # Create MCP server instance
-mcp = FastMCP(name=settings.server_name, host="0.0.0.0", port=8000)
+mcp = _build_mcp_server()
 
 # Register MCP Tools
 @mcp.tool()
@@ -538,50 +567,20 @@ def api_usage_guide():
 
 
 async def initialize_auth():
-    """Initialize authentication automatically from environment variables."""
-    if not all([settings.yougile_email, settings.yougile_password, settings.yougile_company_id]):
+    """Initialize authentication from YOUGILE_API_KEY and YOUGILE_COMPANY_ID."""
+    if not settings.yougile_company_id:
         return False
-    
+
+    api_key_to_test = settings.yougile_api_key or load_api_key_from_credentials()
+    if not api_key_to_test:
+        return False
+
     try:
-        # First try API key from environment (MCP config)
-        api_key_to_test = settings.yougile_api_key
-        
-        # If no API key in environment, try loading from credentials file
-        if not api_key_to_test:
-            api_key_to_test = load_api_key_from_credentials()
-        
-        # Test existing API key if we have one
-        if api_key_to_test:
-            try:
-                # Test existing key
-                auth.auth_manager.set_credentials(api_key_to_test, settings.yougile_company_id)
-                async with YouGileClient(auth.auth_manager) as client:
-                    # Test key with a simple API call (get users)
-                    await client.get("/users")
-                
-                return True
-                
-            except Exception:
-                pass
-        
-        # Create new API key
-        temp_auth = auth.auth_manager.__class__()
-        async with YouGileClient(temp_auth) as client:
-            api_key = await auth_api.create_api_key(
-                client, 
-                settings.yougile_email, 
-                settings.yougile_password, 
-                settings.yougile_company_id
-            )
-            
-            # Save to global auth manager
-            auth.auth_manager.set_credentials(api_key, settings.yougile_company_id)
-            
-            # Save API key to credentials file for future use
-            await save_api_key_to_credentials(api_key)
-            
+        auth.auth_manager.set_credentials(api_key_to_test, settings.yougile_company_id)
+        async with YouGileClient(auth.auth_manager) as client:
+            # Validate key with a lightweight endpoint
+            await client.get("/users")
         return True
-        
     except Exception:
         return False
 
@@ -650,8 +649,8 @@ def load_api_key_from_credentials() -> str:
 
 def main():
     """Main entry point for the server."""
-    # Initialize authentication if credentials are provided
-    if settings.yougile_email and settings.yougile_password and settings.yougile_company_id:
+    # Preload YouGile credentials from env for fast first tool call.
+    if settings.yougile_api_key and settings.yougile_company_id:
         asyncio.run(initialize_auth())
     
     mcp.run(transport="sse")

@@ -6,6 +6,7 @@ Manages environment variables and default values.
 import os
 from pathlib import Path
 from typing import Optional
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
@@ -18,6 +19,9 @@ class Settings(BaseSettings):
     yougile_password: Optional[str] = None
     yougile_company_id: Optional[str] = None
     yougile_api_key: Optional[str] = None
+
+    # MCP incoming API key (no YOUGILE_ prefix)
+    mcp_api_key: Optional[str] = Field(default=None, alias="MCP_API_KEY")
     
     # HTTP client settings
     yougile_timeout: int = 30
