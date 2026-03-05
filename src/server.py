@@ -94,7 +94,7 @@ from .yougile_mcp.prompts.workflow_prompts import (
 )
 
 # Create MCP server instance
-mcp = FastMCP(name=settings.server_name)
+mcp = FastMCP(name=settings.server_name, host="0.0.0.0", port=8000)
 
 # Register MCP Tools
 @mcp.tool()
@@ -654,7 +654,7 @@ def main():
     if settings.yougile_email and settings.yougile_password and settings.yougile_company_id:
         asyncio.run(initialize_auth())
     
-    mcp.run()
+    mcp.run(transport="sse")
 
 
 if __name__ == "__main__":
